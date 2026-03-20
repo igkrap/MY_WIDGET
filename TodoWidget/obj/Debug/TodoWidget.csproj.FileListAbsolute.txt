@@ -1,0 +1,11 @@
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\bin\Debug\TodoWidget.exe
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\bin\Debug\TodoWidget.pdb
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\obj\Debug\TodoWidget.csprojResolveAssemblyReference.cache
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\obj\Debug\MainWindow.baml
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\obj\Debug\App.baml
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\obj\Debug\MainWindow.g.cs
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\obj\Debug\App.g.cs
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\obj\Debug\TodoWidget_MarkupCompile.cache
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\obj\Debug\TodoWidget.g.resources
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\obj\Debug\TodoWidget.exe
+D:\SoftOne\1.C#\MY_WIDGET\TodoWidget\obj\Debug\TodoWidget.pdb

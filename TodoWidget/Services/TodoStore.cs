@@ -276,7 +276,7 @@ namespace TodoWidget.Services
                             TaskDate = targetDate,
                             TaskTime = rule.TaskTime ?? string.Empty,
                             SortOrder = sortOrder++,
-                            ReminderEnabled = rule.ReminderEnabled,
+                            ReminderEnabled = rule.ReminderEnabled && !string.IsNullOrWhiteSpace(rule.TaskTime),
                             ReminderTriggered = false,
                             IsRecurringInstance = true,
                             RecurrenceMode = string.IsNullOrWhiteSpace(rule.RecurrenceMode) ? "none" : rule.RecurrenceMode,
@@ -620,7 +620,8 @@ namespace TodoWidget.Services
                     command.Parameters.Add("@id", System.Data.DbType.String).Value = item.RecurrenceRuleId;
                     command.Parameters.Add("@title_template", System.Data.DbType.String).Value = item.Title ?? string.Empty;
                     command.Parameters.Add("@task_time", System.Data.DbType.String).Value = item.TaskTime ?? string.Empty;
-                    command.Parameters.Add("@reminder_enabled", System.Data.DbType.Int32).Value = item.ReminderEnabled ? 1 : 0;
+                    command.Parameters.Add("@reminder_enabled", System.Data.DbType.Int32).Value =
+                        (!string.IsNullOrWhiteSpace(item.TaskTime) && item.ReminderEnabled) ? 1 : 0;
                     command.Parameters.Add("@recurrence_mode", System.Data.DbType.String).Value = item.RecurrenceMode ?? "none";
                     command.Parameters.Add("@weekday_mask", System.Data.DbType.Int32).Value = item.RecurrenceWeekdayMask;
                     command.Parameters.Add("@created_at", System.Data.DbType.String).Value = updatedAt;

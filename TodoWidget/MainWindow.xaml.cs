@@ -85,6 +85,9 @@ namespace TodoWidget
         private string _telegramChatId;
         private string _pendingTelegramLinkCode;
         private DateTime _pendingTelegramLinkIssuedAtUtc;
+        private DateTime _lastTelegramCommandPollAtUtc;
+        private bool _isTelegramCommandPollingInitialized;
+        private long _telegramNextUpdateId;
         private RecurrenceMode _selectedRecurrenceMode = RecurrenceMode.None;
         private int _selectedWeekdayMask;
         private Point _dragStartPoint;
@@ -266,6 +269,7 @@ namespace TodoWidget
         {
             UpdateClock();
             CheckDueReminders();
+            CheckTelegramCommands();
         }
 
         private void UpdateClock()
@@ -278,10 +282,39 @@ namespace TodoWidget
 
         private void RefreshAll()
         {
+            NormalizeReminderStateForTimelessTodos();
             UpdateInputPlaceholder();
             RefreshRecurrenceRules();
             RefreshVisibleTodos();
             RenderCalendar();
+        }
+
+        private void NormalizeReminderStateForTimelessTodos()
+        {
+            var changed = false;
+            RunBulkTodoUpdate(() =>
+            {
+                foreach (var item in _allTodos)
+                {
+                    if (item == null)
+                    {
+                        continue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(item.TaskTime) || !item.ReminderEnabled)
+                    {
+                        continue;
+                    }
+
+                    item.ReminderEnabled = false;
+                    changed = true;
+                }
+            });
+
+            if (changed)
+            {
+                SaveTodos();
+            }
         }
 
         private void UpdateHeader()
@@ -658,7 +691,7 @@ namespace TodoWidget
                 IsCompleted = false,
                 TaskDate = _selectedDate.Date,
                 TaskTime = normalizedTime,
-                ReminderEnabled = _isReminderEnabledByDefault,
+                ReminderEnabled = _isReminderEnabledByDefault && !string.IsNullOrWhiteSpace(normalizedTime),
                 ReminderTriggered = false,
                 IsRecurringInstance = _selectedRecurrenceMode != RecurrenceMode.None,
                 RecurrenceMode = GetRecurrenceModeValue(_selectedRecurrenceMode),
@@ -1161,20 +1194,7 @@ namespace TodoWidget
                 return;
             }
 
-            if (item.IsRecurringInstance && !string.IsNullOrWhiteSpace(item.RecurrenceRuleId))
-            {
-                _todoStore.AddRecurrenceSkip(item.RecurrenceRuleId, item.TaskDate.Date);
-            }
-
-            var itemDate = item.TaskDate.Date;
-            _allTodos.Remove(item);
-            var remaining = _allTodos
-                .Where(todo => todo.TaskDate.Date == itemDate)
-                .OrderBy(todo => todo.SortOrder)
-                .ToList();
-            ResequenceDateTodos(itemDate, remaining);
-            SaveTodos();
-            RefreshAll();
+            DeleteTodoItem(item);
         }
 
         private void ClearCompletedButtonOnClick(object sender, RoutedEventArgs e)
@@ -2161,6 +2181,88 @@ namespace TodoWidget
             TrySendTelegramMessage(token, _telegramChatId.Trim(), message, out _);
         }
 
+        private void CheckTelegramCommands()
+        {
+            var token = GetActiveTelegramBotToken();
+            var configuredChatId = (_telegramChatId ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(configuredChatId))
+            {
+                return;
+            }
+
+            var nowUtc = DateTime.UtcNow;
+            if ((nowUtc - _lastTelegramCommandPollAtUtc).TotalSeconds < 4)
+            {
+                return;
+            }
+
+            _lastTelegramCommandPollAtUtc = nowUtc;
+
+            List<TelegramUpdateItem> updates;
+            string pollError;
+            if (!TryGetTelegramUpdates(token, _telegramNextUpdateId, out updates, out pollError) || updates == null)
+            {
+                return;
+            }
+
+            if (!_isTelegramCommandPollingInitialized)
+            {
+                _isTelegramCommandPollingInitialized = true;
+                if (updates.Count > 0)
+                {
+                    _telegramNextUpdateId = updates.Max(item => item.UpdateId) + 1;
+                }
+
+                return;
+            }
+
+            if (updates.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var update in updates.OrderBy(item => item.UpdateId))
+            {
+                if (update == null)
+                {
+                    continue;
+                }
+
+                if (update.UpdateId >= _telegramNextUpdateId)
+                {
+                    _telegramNextUpdateId = update.UpdateId + 1;
+                }
+
+                var message = update.Message;
+                var chat = message != null ? message.Chat : null;
+                var text = message != null ? message.Text : null;
+                if (chat == null || string.IsNullOrWhiteSpace(text))
+                {
+                    continue;
+                }
+
+                var incomingChatId = chat.Id.ToString(CultureInfo.InvariantCulture);
+                if (!string.Equals(incomingChatId, configuredChatId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                string responseText;
+                if (!TryHandleTelegramTodoCommand(text, out responseText))
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(responseText))
+                {
+                    continue;
+                }
+
+                string sendError;
+                TrySendTelegramMessage(token, configuredChatId, responseText, out sendError);
+            }
+        }
+
         private string GetActiveTelegramBotToken()
         {
             if (!string.IsNullOrWhiteSpace(DefaultTelegramBotToken))
@@ -2169,6 +2271,342 @@ namespace TodoWidget
             }
 
             return (_telegramBotToken ?? string.Empty).Trim();
+        }
+
+        private bool TryHandleTelegramTodoCommand(string text, out string responseText)
+        {
+            responseText = string.Empty;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            var trimmed = text.Trim();
+            if (!trimmed.StartsWith("/", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var split = trimmed.Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
+            if (split.Length == 0)
+            {
+                return false;
+            }
+
+            var commandToken = split[0].Trim();
+            if (commandToken.Length <= 1)
+            {
+                return false;
+            }
+
+            var commandName = commandToken.Substring(1);
+            var mentionIndex = commandName.IndexOf('@');
+            if (mentionIndex >= 0)
+            {
+                commandName = commandName.Substring(0, mentionIndex);
+            }
+
+            var args = split.Length > 1 ? (split[1] ?? string.Empty).Trim() : string.Empty;
+            switch (commandName.ToLowerInvariant())
+            {
+                case "help":
+                case "?":
+                    responseText = BuildTelegramHelpMessage();
+                    return true;
+                case "add":
+                    responseText = HandleTelegramAddCommand(args);
+                    return true;
+                case "delete":
+                    responseText = HandleTelegramDeleteCommand(args);
+                    return true;
+                case "list":
+                    responseText = HandleTelegramListCommand(args);
+                    return true;
+                case "done":
+                    responseText = HandleTelegramDoneCommand(args);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static string BuildTelegramHelpMessage()
+        {
+            return string.Join("\n", new[]
+            {
+                "TodoWidget Telegram Commands",
+                "/help",
+                "  커맨드 목록 보기",
+                "/add [HHmm] 할일",
+                "  오늘 할일 추가 (시간 생략 가능)",
+                "/list [yyyymmdd]",
+                "  할일 목록 보기 (기본: 오늘)",
+                "/done id",
+                "  할일 완료 처리",
+                "/delete id",
+                "  할일 삭제"
+            });
+        }
+
+        private string HandleTelegramAddCommand(string args)
+        {
+            if (string.IsNullOrWhiteSpace(args))
+            {
+                return "사용법: /add [HHmm] 할일";
+            }
+
+            var remaining = args.Trim();
+            var normalizedTime = string.Empty;
+            var firstToken = remaining.Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+            if (firstToken.Length == 4 && firstToken.All(char.IsDigit))
+            {
+                if (!TryNormalizeTimeInput(firstToken, out normalizedTime))
+                {
+                    return "시간 형식이 올바르지 않습니다. 예: /add 0930 회의";
+                }
+
+                remaining = remaining.Substring(firstToken.Length).Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(remaining))
+            {
+                return "할일 제목이 비어 있습니다. 예: /add 0930 회의";
+            }
+
+            var targetDate = DateTime.Today;
+            var newItem = new TodoItem
+            {
+                Id = Guid.NewGuid(),
+                Title = remaining,
+                IsCompleted = false,
+                TaskDate = targetDate,
+                TaskTime = normalizedTime,
+                ReminderEnabled = _isReminderEnabledByDefault && !string.IsNullOrWhiteSpace(normalizedTime),
+                ReminderTriggered = false,
+                IsRecurringInstance = false,
+                RecurrenceMode = "none",
+                RecurrenceWeekdayMask = 0,
+                RecurrenceRuleId = string.Empty
+            };
+
+            _allTodos.Add(newItem);
+
+            var dayItems = _allTodos
+                .Where(item => item.TaskDate.Date == targetDate && item.Id != newItem.Id)
+                .OrderBy(item => item.SortOrder)
+                .ToList();
+
+            var insertIndex = dayItems.FindIndex(item => CompareByTimeThenTitle(newItem, item) < 0);
+            if (insertIndex < 0)
+            {
+                insertIndex = dayItems.Count;
+            }
+
+            dayItems.Insert(insertIndex, newItem);
+            ResequenceDateTodos(targetDate, dayItems);
+            SaveTodos();
+            RefreshAll();
+
+            return "[추가 완료] " +
+                   (string.IsNullOrWhiteSpace(newItem.TaskTime) ? string.Empty : "[" + newItem.TaskTime + "] ") +
+                   newItem.Title +
+                   "\nID: " + newItem.Id.ToString("D");
+        }
+
+        private string HandleTelegramDeleteCommand(string args)
+        {
+            var idToken = (args ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(idToken))
+            {
+                return "사용법: /delete id";
+            }
+
+            TodoItem item;
+            string error;
+            if (!TryResolveTodoItemByIdToken(idToken, out item, out error))
+            {
+                return error;
+            }
+
+            DeleteTodoItem(item);
+            return "[삭제 완료] " + item.Title + "\nID: " + item.Id.ToString("D");
+        }
+
+        private string HandleTelegramDoneCommand(string args)
+        {
+            var idToken = (args ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(idToken))
+            {
+                return "사용법: /done id";
+            }
+
+            TodoItem item;
+            string error;
+            if (!TryResolveTodoItemByIdToken(idToken, out item, out error))
+            {
+                return error;
+            }
+
+            if (item.IsCompleted)
+            {
+                return "이미 완료된 항목입니다.\nID: " + item.Id.ToString("D");
+            }
+
+            item.IsCompleted = true;
+            SaveTodos();
+            RefreshAll();
+            return "[완료 처리] " + item.Title + "\nID: " + item.Id.ToString("D");
+        }
+
+        private string HandleTelegramListCommand(string args)
+        {
+            var dateArg = (args ?? string.Empty).Trim();
+            var targetDate = DateTime.Today;
+            if (!string.IsNullOrWhiteSpace(dateArg))
+            {
+                if (!DateTime.TryParseExact(dateArg, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out targetDate))
+                {
+                    return "날짜 형식이 올바르지 않습니다. 예: /list 20260321";
+                }
+            }
+
+            EnsureRecurringInstancesLoadedForDate(targetDate);
+
+            var items = _allTodos
+                .Where(item => item.TaskDate.Date == targetDate.Date)
+                .OrderBy(item => item.SortOrder)
+                .ThenBy(item => item.Title)
+                .ToList();
+
+            if (items.Count == 0)
+            {
+                return targetDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + " 할일이 없습니다.";
+            }
+
+            var lines = new List<string>
+            {
+                targetDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + " 할일 " + items.Count.ToString(CultureInfo.InvariantCulture) + "개"
+            };
+
+            foreach (var item in items)
+            {
+                lines.Add((item.IsCompleted ? "[x] " : "[ ] ") +
+                          (string.IsNullOrWhiteSpace(item.TaskTime) ? string.Empty : item.TaskTime + " ") +
+                          item.Title);
+                lines.Add("ID: " + item.Id.ToString("D"));
+            }
+
+            return string.Join("\n", lines);
+        }
+
+        private bool TryResolveTodoItemByIdToken(string idToken, out TodoItem item, out string error)
+        {
+            item = null;
+            error = string.Empty;
+
+            var normalized = (idToken ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                error = "ID를 입력해 주세요.";
+                return false;
+            }
+
+            Guid parsedGuid;
+            if (Guid.TryParse(normalized, out parsedGuid))
+            {
+                item = _allTodos.FirstOrDefault(todo => todo.Id == parsedGuid);
+                if (item == null)
+                {
+                    error = "해당 ID의 할일을 찾지 못했습니다.";
+                    return false;
+                }
+
+                return true;
+            }
+
+            var matches = _allTodos
+                .Where(todo => todo.Id.ToString("D").StartsWith(normalized, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (matches.Count == 0)
+            {
+                error = "해당 ID의 할일을 찾지 못했습니다.";
+                return false;
+            }
+
+            if (matches.Count > 1)
+            {
+                error = "ID가 여러 항목과 일치합니다. /list에서 더 긴 ID를 사용해 주세요.";
+                return false;
+            }
+
+            item = matches[0];
+            return true;
+        }
+
+        private void DeleteTodoItem(TodoItem item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            if (item.IsRecurringInstance && !string.IsNullOrWhiteSpace(item.RecurrenceRuleId))
+            {
+                _todoStore.AddRecurrenceSkip(item.RecurrenceRuleId, item.TaskDate.Date);
+            }
+
+            var itemDate = item.TaskDate.Date;
+            _allTodos.Remove(item);
+            var remaining = _allTodos
+                .Where(todo => todo.TaskDate.Date == itemDate)
+                .OrderBy(todo => todo.SortOrder)
+                .ToList();
+            ResequenceDateTodos(itemDate, remaining);
+            SaveTodos();
+            RefreshAll();
+        }
+
+        private static bool TryGetTelegramUpdates(string token, long offset, out List<TelegramUpdateItem> updates, out string error)
+        {
+            updates = new List<TelegramUpdateItem>();
+            error = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                error = "Missing token";
+                return false;
+            }
+
+            try
+            {
+                var url = "https://api.telegram.org/bot" + token.Trim() + "/getUpdates?timeout=0";
+                if (offset > 0)
+                {
+                    url += "&offset=" + offset.ToString(CultureInfo.InvariantCulture);
+                }
+
+                var response = TelegramHttpClient.GetAsync(url).GetAwaiter().GetResult();
+                if (!response.IsSuccessStatusCode)
+                {
+                    error = "getUpdates failed: " + response.StatusCode;
+                    return false;
+                }
+
+                var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                var serializer = new DataContractJsonSerializer(typeof(TelegramUpdatesResponse));
+                using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json ?? string.Empty)))
+                {
+                    var parsed = serializer.ReadObject(stream) as TelegramUpdatesResponse;
+                    updates = parsed != null && parsed.Result != null ? parsed.Result : new List<TelegramUpdateItem>();
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
         }
 
         private static bool TrySendTelegramMessage(string token, string chatId, string message, out string error)

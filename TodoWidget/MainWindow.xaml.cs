@@ -479,17 +479,7 @@ namespace TodoWidget
         }
         private void RefreshVisibleTodos()
         {
-            var generatedItems = _todoStore.EnsureRecurringInstancesForDate(_selectedDate.Date);
-            if (generatedItems != null && generatedItems.Count > 0)
-            {
-                foreach (var generatedItem in generatedItems)
-                {
-                    if (_allTodos.All(existing => existing.Id != generatedItem.Id))
-                    {
-                        _allTodos.Add(generatedItem);
-                    }
-                }
-            }
+            EnsureRecurringInstancesLoadedForDate(_selectedDate.Date);
 
             var orderedItems = _allTodos
                 .Where(IsSelectedDateTodo)
@@ -506,6 +496,23 @@ namespace TodoWidget
 
             EmptyStateTextBlock.Visibility = _visibleTodos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             UpdateHeader();
+        }
+
+        private void EnsureRecurringInstancesLoadedForDate(DateTime date)
+        {
+            var generatedItems = _todoStore.EnsureRecurringInstancesForDate(date.Date);
+            if (generatedItems == null || generatedItems.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var generatedItem in generatedItems)
+            {
+                if (_allTodos.All(existing => existing.Id != generatedItem.Id))
+                {
+                    _allTodos.Add(generatedItem);
+                }
+            }
         }
 
         private bool IsSelectedDateTodo(TodoItem item)
@@ -635,12 +642,13 @@ namespace TodoWidget
             }
 
             var normalizedTime = string.Empty;
-            if (!string.IsNullOrWhiteSpace(timeText) && !TryNormalizeTimeInput(timeText, out normalizedTime))
+            if (!string.IsNullOrWhiteSpace(timeText))
             {
-                MessageBox.Show("\uC2DC\uAC04\uC740 HH:mm \uD615\uC2DD\uC73C\uB85C \uC785\uB825\uD574 \uC8FC\uC138\uC694.  \uC608: 09:30", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
-                TodoTimeTextBox.Focus();
-                TodoTimeTextBox.SelectAll();
-                return;
+                string parsedTime;
+                if (TryNormalizeTimeInput(timeText, out parsedTime))
+                {
+                    normalizedTime = parsedTime;
+                }
             }
 
             var newItem = new TodoItem
@@ -1039,6 +1047,8 @@ namespace TodoWidget
         private void CheckDueReminders()
         {
             var now = DateTime.Now;
+            EnsureRecurringInstancesLoadedForDate(now.Date);
+
             var checkStart = _lastReminderCheckAt;
             if (checkStart > now)
             {

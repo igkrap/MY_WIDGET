@@ -5,9 +5,15 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Media;
+using System.Net.Http;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -46,6 +52,10 @@ namespace TodoWidget
         private const uint ModShift = 0x0004;
         private const uint ModWin = 0x0008;
         private const uint VkQ = 0x51;
+        private const string DefaultTelegramBotToken = "";
+        private const string DefaultTelegramBotUsername = "";
+        private static readonly object TelegramLinkCodeLock = new object();
+        private static readonly Dictionary<string, DateTime> RecentTelegramLinkCodes = new Dictionary<string, DateTime>(StringComparer.Ordinal);
 
         private readonly ObservableCollection<TodoItem> _allTodos;
         private readonly ObservableCollection<TodoItem> _visibleTodos;
@@ -55,6 +65,7 @@ namespace TodoWidget
         private readonly StartupManager _startupManager;
         private readonly DispatcherTimer _clockTimer;
         private readonly CultureInfo _koreanCulture;
+        private static readonly HttpClient TelegramHttpClient = new HttpClient();
 
         private Forms.NotifyIcon _notifyIcon;
         private Forms.ToolStripMenuItem _trayTopmostMenuItem;
@@ -69,6 +80,11 @@ namespace TodoWidget
         private bool _isRepeatOptionsVisible;
         private DateTime _lastReminderCheckAt;
         private bool? _recurrencePopupWasOpenOnTogglePress;
+        private bool _isTelegramEnabled;
+        private string _telegramBotToken;
+        private string _telegramChatId;
+        private string _pendingTelegramLinkCode;
+        private DateTime _pendingTelegramLinkIssuedAtUtc;
         private RecurrenceMode _selectedRecurrenceMode = RecurrenceMode.None;
         private int _selectedWeekdayMask;
         private Point _dragStartPoint;
@@ -172,6 +188,9 @@ namespace TodoWidget
             var exportMenuItem = new Forms.ToolStripMenuItem("Export Report");
             exportMenuItem.Click += ExportReportTrayMenuItemOnClick;
 
+            var telegramSettingsMenuItem = new Forms.ToolStripMenuItem("Telegram Settings...");
+            telegramSettingsMenuItem.Click += TelegramSettingsTrayMenuItemOnClick;
+
             _trayTopmostMenuItem = new Forms.ToolStripMenuItem("Always on top");
             _trayTopmostMenuItem.Click += TopmostTrayMenuItemOnClick;
 
@@ -184,6 +203,7 @@ namespace TodoWidget
             var menu = new Forms.ContextMenuStrip();
             menu.Items.Add(openMenuItem);
             menu.Items.Add(exportMenuItem);
+            menu.Items.Add(telegramSettingsMenuItem);
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(_trayTopmostMenuItem);
             menu.Items.Add(_trayStartupMenuItem);
@@ -225,6 +245,11 @@ namespace TodoWidget
             Topmost = settings.IsTopmost;
             Opacity = safeOpacity;
             OpacitySlider.Value = safeOpacity;
+            _isTelegramEnabled = settings.TelegramEnabled;
+            _telegramBotToken = !string.IsNullOrWhiteSpace(DefaultTelegramBotToken)
+                ? DefaultTelegramBotToken
+                : (settings.TelegramBotToken ?? string.Empty);
+            _telegramChatId = settings.TelegramChatId ?? string.Empty;
             SyncTaskPanelVisualState();
         }
 
@@ -1106,6 +1131,8 @@ namespace TodoWidget
             {
                 // Ignore sound errors.
             }
+
+            SendTelegramReminder(message);
         }
 
         private void DeleteTodoButtonOnClick(object sender, RoutedEventArgs e)
@@ -1436,6 +1463,9 @@ namespace TodoWidget
             var settings = new WidgetSettings();
             settings.Opacity = ClampOpacity(Opacity);
             settings.IsTopmost = Topmost;
+            settings.TelegramEnabled = _isTelegramEnabled;
+            settings.TelegramBotToken = _telegramBotToken ?? string.Empty;
+            settings.TelegramChatId = _telegramChatId ?? string.Empty;
 
             _settingsStore.Save(settings);
         }
@@ -1641,6 +1671,11 @@ namespace TodoWidget
             Process.Start("explorer.exe", "\"" + _todoStore.DirectoryPath + "\"");
         }
 
+        private void TelegramSettingsTrayMenuItemOnClick(object sender, EventArgs e)
+        {
+            ShowTelegramSettingsDialog();
+        }
+
         private void ExportReportTrayMenuItemOnClick(object sender, EventArgs e)
         {
             try
@@ -1743,6 +1778,627 @@ namespace TodoWidget
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
             _notifyIcon = null;
+        }
+
+        private void ShowTelegramSettingsDialog()
+        {
+            using (var dialog = new Forms.Form())
+            {
+                dialog.Text = "Telegram Settings";
+                dialog.FormBorderStyle = Forms.FormBorderStyle.FixedDialog;
+                dialog.StartPosition = Forms.FormStartPosition.CenterScreen;
+                dialog.MaximizeBox = false;
+                dialog.MinimizeBox = false;
+                dialog.Font = new Drawing.Font("Segoe UI", 10F, Drawing.FontStyle.Regular, Drawing.GraphicsUnit.Point);
+                dialog.AutoScaleMode = Forms.AutoScaleMode.Font;
+                dialog.ClientSize = new Drawing.Size(900, 650);
+
+                var enabledCheckBox = new Forms.CheckBox();
+                enabledCheckBox.Text = "Enable Telegram notifications";
+                enabledCheckBox.Checked = _isTelegramEnabled;
+                enabledCheckBox.AutoSize = true;
+                enabledCheckBox.Margin = new Forms.Padding(0, 0, 0, 8);
+
+                var tokenLabel = new Forms.Label();
+                tokenLabel.Text = "Bot Token";
+                tokenLabel.AutoSize = true;
+                tokenLabel.Margin = new Forms.Padding(0, 2, 0, 2);
+
+                var tokenTextBox = new Forms.TextBox();
+                tokenTextBox.Text = !string.IsNullOrWhiteSpace(DefaultTelegramBotToken)
+                    ? DefaultTelegramBotToken
+                    : (_telegramBotToken ?? string.Empty);
+                tokenTextBox.ReadOnly = !string.IsNullOrWhiteSpace(DefaultTelegramBotToken);
+                tokenTextBox.Dock = Forms.DockStyle.Fill;
+                tokenTextBox.Margin = new Forms.Padding(0, 0, 0, 8);
+
+                var chatIdLabel = new Forms.Label();
+                chatIdLabel.Text = "Chat ID";
+                chatIdLabel.AutoSize = true;
+                chatIdLabel.Margin = new Forms.Padding(0, 2, 0, 2);
+
+                var chatIdTextBox = new Forms.TextBox();
+                chatIdTextBox.Text = _telegramChatId ?? string.Empty;
+                chatIdTextBox.Dock = Forms.DockStyle.Fill;
+                chatIdTextBox.Margin = new Forms.Padding(0, 0, 0, 8);
+
+                var startLinkButton = new Forms.Button();
+                startLinkButton.Text = "Start Link";
+                startLinkButton.Width = 120;
+                startLinkButton.Height = 32;
+                startLinkButton.Margin = new Forms.Padding(0, 0, 8, 0);
+
+                var verifyLinkButton = new Forms.Button();
+                verifyLinkButton.Text = "Verify Link";
+                verifyLinkButton.Width = 120;
+                verifyLinkButton.Height = 32;
+                verifyLinkButton.Margin = new Forms.Padding(0);
+
+                var linkUrlLabel = new Forms.Label();
+                linkUrlLabel.Text = "Link URL";
+                linkUrlLabel.AutoSize = true;
+                linkUrlLabel.TextAlign = Drawing.ContentAlignment.MiddleLeft;
+                linkUrlLabel.Margin = new Forms.Padding(0, 0, 8, 0);
+
+                var linkUrlTextBox = new Forms.TextBox();
+                linkUrlTextBox.ReadOnly = true;
+                linkUrlTextBox.Dock = Forms.DockStyle.Fill;
+                linkUrlTextBox.Margin = new Forms.Padding(0, 0, 8, 0);
+
+                var copyLinkButton = new Forms.Button();
+                copyLinkButton.Text = "Copy URL";
+                copyLinkButton.Width = 110;
+                copyLinkButton.Height = 28;
+                copyLinkButton.Margin = new Forms.Padding(0);
+
+                var commandLabel = new Forms.Label();
+                commandLabel.Text = "Command";
+                commandLabel.AutoSize = true;
+                commandLabel.TextAlign = Drawing.ContentAlignment.MiddleLeft;
+                commandLabel.Margin = new Forms.Padding(0, 0, 8, 0);
+
+                var commandTextBox = new Forms.TextBox();
+                commandTextBox.ReadOnly = true;
+                commandTextBox.Dock = Forms.DockStyle.Fill;
+                commandTextBox.Margin = new Forms.Padding(0, 0, 8, 0);
+
+                var copyCommandButton = new Forms.Button();
+                copyCommandButton.Text = "Copy /link";
+                copyCommandButton.Width = 110;
+                copyCommandButton.Height = 28;
+                copyCommandButton.Margin = new Forms.Padding(0);
+
+                var guideTextBox = new Forms.TextBox();
+                guideTextBox.Multiline = true;
+                guideTextBox.ReadOnly = true;
+                guideTextBox.TabStop = false;
+                guideTextBox.ScrollBars = Forms.ScrollBars.None;
+                guideTextBox.WordWrap = true;
+                guideTextBox.Dock = Forms.DockStyle.Fill;
+                guideTextBox.Margin = new Forms.Padding(0, 8, 0, 8);
+                guideTextBox.Text =
+                    "1. 현재 사용 PC 및 알림 원하는 기기에 텔레그램 설치\r\n" +
+                    "2. Start Link 클릭하여 봇 채팅 Start\r\n" +
+                    "3. 봇 채팅방에서 복사된 Command 붙여넣기\r\n" +
+                    "4. Verify Link 클릭하여 Chat ID 로드\r\n" +
+                    "5. Test 클릭하여 연동 체크\r\n" +
+                    "6. Save를 클릭하여 연동 완료";
+
+                var saveButton = new Forms.Button();
+                saveButton.Text = "Save";
+                saveButton.Width = 96;
+                saveButton.Height = 32;
+                saveButton.Margin = new Forms.Padding(8, 0, 0, 0);
+
+                var testButton = new Forms.Button();
+                testButton.Text = "Test";
+                testButton.Width = 96;
+                testButton.Height = 32;
+                testButton.Margin = new Forms.Padding(8, 0, 0, 0);
+
+                var cancelButton = new Forms.Button();
+                cancelButton.Text = "Cancel";
+                cancelButton.DialogResult = Forms.DialogResult.Cancel;
+                cancelButton.Width = 98;
+                cancelButton.Height = 32;
+                cancelButton.Margin = new Forms.Padding(8, 0, 0, 0);
+
+                saveButton.Click += delegate
+                {
+                    var enabled = enabledCheckBox.Checked;
+                    var savedToken = (tokenTextBox.Text ?? string.Empty).Trim();
+                    var chatId = (chatIdTextBox.Text ?? string.Empty).Trim();
+
+                    if (enabled && (string.IsNullOrWhiteSpace(savedToken) || string.IsNullOrWhiteSpace(chatId)))
+                    {
+                        MessageBox.Show("Telegram 사용 시 Bot Token과 Chat ID를 모두 입력해 주세요.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    _isTelegramEnabled = enabled;
+                    _telegramBotToken = savedToken;
+                    _telegramChatId = chatId;
+                    SaveSettings();
+                    MessageBox.Show("저장되었습니다.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                };
+
+                startLinkButton.Click += delegate
+                {
+                    var token = (tokenTextBox.Text ?? string.Empty).Trim();
+                    if (string.IsNullOrWhiteSpace(token))
+                    {
+                        MessageBox.Show("Bot Token이 비어 있습니다.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    var code = GenerateTelegramLinkCode();
+                    _pendingTelegramLinkCode = code;
+                    _pendingTelegramLinkIssuedAtUtc = DateTime.UtcNow;
+                    var linkCommand = "/link " + code;
+                    commandTextBox.Text = linkCommand;
+
+                    try
+                    {
+                        Forms.Clipboard.SetText(linkCommand);
+                    }
+                    catch
+                    {
+                        // Ignore clipboard errors and continue.
+                    }
+
+                    var botUsername = string.Empty;
+                    string usernameError;
+                    if (!string.IsNullOrWhiteSpace(DefaultTelegramBotUsername))
+                    {
+                        botUsername = DefaultTelegramBotUsername.Trim().TrimStart('@');
+                    }
+                    else
+                    {
+                        TryGetTelegramBotUsername(token, out botUsername, out usernameError);
+                    }
+
+                    var startPayload = "link_" + code;
+                    if (!string.IsNullOrWhiteSpace(botUsername))
+                    {
+                        var linkUrl = "https://t.me/" + botUsername + "?start=" + Uri.EscapeDataString(startPayload);
+                        var webFallbackUrl = "https://web.telegram.org/k/#@" + botUsername;
+                        linkUrlTextBox.Text = linkUrl;
+                        try
+                        {
+                            Process.Start("explorer.exe", "\"" + linkUrl + "\"");
+                        }
+                        catch
+                        {
+                        }
+                    }
+                    else
+                    {
+                        linkUrlTextBox.Text = string.Empty;
+                    }
+                };
+
+                copyLinkButton.Click += delegate
+                {
+                    var text = linkUrlTextBox.Text ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        MessageBox.Show("복사할 링크가 없습니다. Start Link를 먼저 누르세요.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    try
+                    {
+                        Forms.Clipboard.SetText(text);
+                        MessageBox.Show("링크를 복사했습니다.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    catch
+                    {
+                        MessageBox.Show("클립보드 복사에 실패했습니다.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                };
+
+                copyCommandButton.Click += delegate
+                {
+                    var text = commandTextBox.Text ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        MessageBox.Show("복사할 명령이 없습니다. Start Link를 먼저 누르세요.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    try
+                    {
+                        Forms.Clipboard.SetText(text);
+                        MessageBox.Show("/link 명령을 복사했습니다.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    catch
+                    {
+                        MessageBox.Show("클립보드 복사에 실패했습니다.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                };
+
+                verifyLinkButton.Click += delegate
+                {
+                    var token = (tokenTextBox.Text ?? string.Empty).Trim();
+                    if (string.IsNullOrWhiteSpace(token))
+                    {
+                        MessageBox.Show("Bot Token이 비어 있습니다.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(_pendingTelegramLinkCode))
+                    {
+                        MessageBox.Show("먼저 Start Link를 눌러 인증코드를 생성하세요.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    string linkedChatId;
+                    string error;
+                    if (TryResolveTelegramChatIdByCode(token, _pendingTelegramLinkCode, _pendingTelegramLinkIssuedAtUtc, out linkedChatId, out error))
+                    {
+                        chatIdTextBox.Text = linkedChatId;
+                        MessageBox.Show("연동 완료: Chat ID를 자동으로 가져왔습니다.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("연동 확인 실패\n" + error, "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                };
+
+                testButton.Click += delegate
+                {
+                    var testToken = (tokenTextBox.Text ?? string.Empty).Trim();
+                    var testChatId = (chatIdTextBox.Text ?? string.Empty).Trim();
+                    if (string.IsNullOrWhiteSpace(testToken) || string.IsNullOrWhiteSpace(testChatId))
+                    {
+                        MessageBox.Show("Bot Token과 Chat ID를 입력한 뒤 테스트해 주세요.", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    string error;
+                    if (TrySendTelegramMessage(testToken, testChatId, "[TodoWidget] Telegram test message", out error))
+                    {
+                        MessageBox.Show("테스트 메시지 전송 성공", "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("테스트 메시지 전송 실패\n" + error, "TodoWidget", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                };
+
+                var actionPanel = new Forms.FlowLayoutPanel();
+                actionPanel.AutoSize = true;
+                actionPanel.WrapContents = false;
+                actionPanel.FlowDirection = Forms.FlowDirection.LeftToRight;
+                actionPanel.Dock = Forms.DockStyle.Fill;
+                actionPanel.Margin = new Forms.Padding(0, 0, 0, 8);
+                actionPanel.Controls.Add(startLinkButton);
+                actionPanel.Controls.Add(verifyLinkButton);
+
+                var linkRowPanel = new Forms.TableLayoutPanel();
+                linkRowPanel.ColumnCount = 3;
+                linkRowPanel.RowCount = 2;
+                linkRowPanel.Dock = Forms.DockStyle.Fill;
+                linkRowPanel.Margin = new Forms.Padding(0);
+                linkRowPanel.ColumnStyles.Add(new Forms.ColumnStyle(Forms.SizeType.AutoSize));
+                linkRowPanel.ColumnStyles.Add(new Forms.ColumnStyle(Forms.SizeType.Percent, 100F));
+                linkRowPanel.ColumnStyles.Add(new Forms.ColumnStyle(Forms.SizeType.AutoSize));
+                linkRowPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.AutoSize));
+                linkRowPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.AutoSize));
+
+                linkRowPanel.Controls.Add(linkUrlLabel, 0, 0);
+                linkRowPanel.Controls.Add(linkUrlTextBox, 1, 0);
+                linkRowPanel.Controls.Add(copyLinkButton, 2, 0);
+                linkRowPanel.Controls.Add(commandLabel, 0, 1);
+                linkRowPanel.Controls.Add(commandTextBox, 1, 1);
+                linkRowPanel.Controls.Add(copyCommandButton, 2, 1);
+
+                var bottomButtonPanel = new Forms.FlowLayoutPanel();
+                bottomButtonPanel.AutoSize = true;
+                bottomButtonPanel.WrapContents = false;
+                bottomButtonPanel.FlowDirection = Forms.FlowDirection.RightToLeft;
+                bottomButtonPanel.Dock = Forms.DockStyle.Fill;
+                bottomButtonPanel.Margin = new Forms.Padding(0);
+                bottomButtonPanel.Controls.Add(cancelButton);
+                bottomButtonPanel.Controls.Add(saveButton);
+                bottomButtonPanel.Controls.Add(testButton);
+
+                var rootPanel = new Forms.TableLayoutPanel();
+                rootPanel.Dock = Forms.DockStyle.Fill;
+                rootPanel.Padding = new Forms.Padding(16, 16, 16, 12);
+                rootPanel.ColumnCount = 1;
+                rootPanel.RowCount = 9;
+                rootPanel.ColumnStyles.Add(new Forms.ColumnStyle(Forms.SizeType.Percent, 100F));
+                rootPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.AutoSize));
+                rootPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.AutoSize));
+                rootPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.AutoSize));
+                rootPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.AutoSize));
+                rootPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.AutoSize));
+                rootPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.AutoSize));
+                rootPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.AutoSize));
+                rootPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.Percent, 100F));
+                rootPanel.RowStyles.Add(new Forms.RowStyle(Forms.SizeType.AutoSize));
+
+                rootPanel.Controls.Add(enabledCheckBox, 0, 0);
+                rootPanel.Controls.Add(tokenLabel, 0, 1);
+                rootPanel.Controls.Add(tokenTextBox, 0, 2);
+                rootPanel.Controls.Add(chatIdLabel, 0, 3);
+                rootPanel.Controls.Add(chatIdTextBox, 0, 4);
+                rootPanel.Controls.Add(actionPanel, 0, 5);
+                rootPanel.Controls.Add(linkRowPanel, 0, 6);
+                rootPanel.Controls.Add(guideTextBox, 0, 7);
+                rootPanel.Controls.Add(bottomButtonPanel, 0, 8);
+
+                dialog.Controls.Add(rootPanel);
+                dialog.AcceptButton = null;
+                dialog.CancelButton = cancelButton;
+                dialog.ShowDialog();
+            }
+        }
+
+        private void SendTelegramReminder(string message)
+        {
+            var token = GetActiveTelegramBotToken();
+            if (!_isTelegramEnabled ||
+                string.IsNullOrWhiteSpace(token) ||
+                string.IsNullOrWhiteSpace(_telegramChatId) ||
+                string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            string _;
+            TrySendTelegramMessage(token, _telegramChatId.Trim(), message, out _);
+        }
+
+        private string GetActiveTelegramBotToken()
+        {
+            if (!string.IsNullOrWhiteSpace(DefaultTelegramBotToken))
+            {
+                return DefaultTelegramBotToken.Trim();
+            }
+
+            return (_telegramBotToken ?? string.Empty).Trim();
+        }
+
+        private static bool TrySendTelegramMessage(string token, string chatId, string message, out string error)
+        {
+            error = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(chatId) || string.IsNullOrWhiteSpace(message))
+            {
+                error = "Missing token/chat_id/message";
+                return false;
+            }
+
+            try
+            {
+                var requestUrl =
+                    "https://api.telegram.org/bot" + token.Trim() +
+                    "/sendMessage?chat_id=" + Uri.EscapeDataString(chatId.Trim()) +
+                    "&text=" + Uri.EscapeDataString(message) +
+                    "&disable_notification=false";
+
+                var response = TelegramHttpClient.GetAsync(requestUrl).GetAwaiter().GetResult();
+                if (!response.IsSuccessStatusCode)
+                {
+                    var body = response.Content != null
+                        ? response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                        : string.Empty;
+                    error = "HTTP " + ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture) + " " + response.ReasonPhrase + " " + body;
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private static string GenerateTelegramLinkCode()
+        {
+            lock (TelegramLinkCodeLock)
+            {
+                var now = DateTime.UtcNow;
+                var staleCodes = RecentTelegramLinkCodes
+                    .Where(entry => (now - entry.Value).TotalHours >= 24)
+                    .Select(entry => entry.Key)
+                    .ToList();
+
+                foreach (var staleCode in staleCodes)
+                {
+                    RecentTelegramLinkCodes.Remove(staleCode);
+                }
+
+                for (var attempt = 0; attempt < 30; attempt++)
+                {
+                    var code = GenerateSecureGroupedCode();
+                    if (RecentTelegramLinkCodes.ContainsKey(code))
+                    {
+                        continue;
+                    }
+
+                    RecentTelegramLinkCodes[code] = now;
+                    return code;
+                }
+
+                var fallback = Guid.NewGuid().ToString("N").Substring(0, 12).ToUpperInvariant();
+                RecentTelegramLinkCodes[fallback] = now;
+                return fallback;
+            }
+        }
+
+        private static string GenerateSecureGroupedCode()
+        {
+            const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+            const int codeLength = 12;
+            var buffer = new byte[codeLength];
+            var chars = new char[codeLength];
+
+            using (var rng = new RNGCryptoServiceProvider())
+            {
+                rng.GetBytes(buffer);
+                for (var i = 0; i < codeLength; i++)
+                {
+                    chars[i] = alphabet[buffer[i] % alphabet.Length];
+                }
+            }
+
+            return new string(chars, 0, 4) + "-" +
+                   new string(chars, 4, 4) + "-" +
+                   new string(chars, 8, 4);
+        }
+
+        private static bool TryResolveTelegramChatIdByCode(string token, string code, DateTime issuedAfterUtc, out string chatId, out string error)
+        {
+            chatId = string.Empty;
+            error = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(code))
+            {
+                error = "Missing token/code";
+                return false;
+            }
+
+            try
+            {
+                var updatesUrl = "https://api.telegram.org/bot" + token.Trim() + "/getUpdates";
+                var response = TelegramHttpClient.GetAsync(updatesUrl).GetAwaiter().GetResult();
+                if (!response.IsSuccessStatusCode)
+                {
+                    error = "getUpdates failed: " + response.StatusCode;
+                    return false;
+                }
+
+                var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                var serializer = new DataContractJsonSerializer(typeof(TelegramUpdatesResponse));
+                using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json ?? string.Empty)))
+                {
+                    var updates = serializer.ReadObject(stream) as TelegramUpdatesResponse;
+                    if (updates == null || updates.Result == null || updates.Result.Count == 0)
+                    {
+                        error = "No updates yet. 봇 채팅에서 시작 또는 /link 코드를 먼저 보내주세요.";
+                        return false;
+                    }
+
+                    var matched = updates.Result
+                        .Where(item => item != null && item.Message != null && !string.IsNullOrWhiteSpace(item.Message.Text))
+                        .Where(item => item.Message.Date <= 0 || DateTimeOffset.FromUnixTimeSeconds(item.Message.Date).UtcDateTime >= issuedAfterUtc.AddSeconds(-3))
+                        .OrderByDescending(item => item.UpdateId)
+                        .FirstOrDefault(item => item.Message.Text.IndexOf(code, StringComparison.OrdinalIgnoreCase) >= 0);
+
+                    if (matched == null || matched.Message == null || matched.Message.Chat == null)
+                    {
+                        error = "코드가 포함된 메시지를 찾지 못했습니다.";
+                        return false;
+                    }
+
+                    chatId = matched.Message.Chat.Id.ToString(CultureInfo.InvariantCulture);
+                    return !string.IsNullOrWhiteSpace(chatId);
+                }
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private static bool TryGetTelegramBotUsername(string token, out string username, out string error)
+        {
+            username = string.Empty;
+            error = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                error = "Missing token";
+                return false;
+            }
+
+            try
+            {
+                var url = "https://api.telegram.org/bot" + token.Trim() + "/getMe";
+                var response = TelegramHttpClient.GetAsync(url).GetAwaiter().GetResult();
+                if (!response.IsSuccessStatusCode)
+                {
+                    error = "getMe failed: " + response.StatusCode;
+                    return false;
+                }
+
+                var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                var serializer = new DataContractJsonSerializer(typeof(TelegramGetMeResponse));
+                using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json ?? string.Empty)))
+                {
+                    var parsed = serializer.ReadObject(stream) as TelegramGetMeResponse;
+                    if (parsed == null || parsed.Result == null || string.IsNullOrWhiteSpace(parsed.Result.Username))
+                    {
+                        error = "username not found";
+                        return false;
+                    }
+
+                    username = parsed.Result.Username.Trim().TrimStart('@');
+                    return !string.IsNullOrWhiteSpace(username);
+                }
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        [DataContract]
+        private sealed class TelegramUpdatesResponse
+        {
+            [DataMember(Name = "result")]
+            public List<TelegramUpdateItem> Result { get; set; }
+        }
+
+        [DataContract]
+        private sealed class TelegramUpdateItem
+        {
+            [DataMember(Name = "update_id")]
+            public long UpdateId { get; set; }
+
+            [DataMember(Name = "message")]
+            public TelegramMessageItem Message { get; set; }
+        }
+
+        [DataContract]
+        private sealed class TelegramMessageItem
+        {
+            [DataMember(Name = "text")]
+            public string Text { get; set; }
+
+            [DataMember(Name = "date")]
+            public long Date { get; set; }
+
+            [DataMember(Name = "chat")]
+            public TelegramChatItem Chat { get; set; }
+        }
+
+        [DataContract]
+        private sealed class TelegramChatItem
+        {
+            [DataMember(Name = "id")]
+            public long Id { get; set; }
+        }
+
+        [DataContract]
+        private sealed class TelegramGetMeResponse
+        {
+            [DataMember(Name = "result")]
+            public TelegramBotUser Result { get; set; }
+        }
+
+        [DataContract]
+        private sealed class TelegramBotUser
+        {
+            [DataMember(Name = "username")]
+            public string Username { get; set; }
         }
 
         private static T FindAncestor<T>(DependencyObject current) where T : DependencyObject

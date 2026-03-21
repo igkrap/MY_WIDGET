@@ -54,7 +54,10 @@ namespace TodoWidget.Services
             return new WidgetSettings
             {
                 Opacity = 0.96,
-                IsTopmost = true
+                IsTopmost = true,
+                TelegramEnabled = false,
+                TelegramBotToken = string.Empty,
+                TelegramChatId = string.Empty
             };
         }
     }

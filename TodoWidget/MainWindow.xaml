@@ -1,11 +1,11 @@
-<Window x:Class="TodoWidget.MainWindow"
+﻿<Window x:Class="TodoWidget.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="TodoWidget"
         Width="420"
-        Height="790"
+        Height="520"
         MinWidth="400"
-        MinHeight="740"
+        MinHeight="500"
         WindowStyle="None"
         ResizeMode="NoResize"
         AllowsTransparency="True"
@@ -14,45 +14,48 @@
         Topmost="True"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
+        SourceInitialized="WindowSourceInitialized"
         Loaded="WindowLoaded"
         Closing="WindowClosing"
         StateChanged="WindowStateChanged">
     <Window.Resources>
-        <SolidColorBrush x:Key="TextBrush" Color="#FFF7FBFF" />
-        <SolidColorBrush x:Key="MutedBrush" Color="#FF95A4BA" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#FF63D7B0" />
-        <SolidColorBrush x:Key="CardBrush" Color="#C0141D29" />
-        <SolidColorBrush x:Key="CardSecondaryBrush" Color="#B5101721" />
-        <SolidColorBrush x:Key="StrokeBrush" Color="#2CFFFFFF" />
-        <SolidColorBrush x:Key="SubtleStrokeBrush" Color="#16FFFFFF" />
+        <SolidColorBrush x:Key="TextBrush" Color="#FFF1F5FA" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#FF94A0B0" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#FF76B89A" />
+        <SolidColorBrush x:Key="CardBrush" Color="#CF1A2431" />
+        <SolidColorBrush x:Key="CardSecondaryBrush" Color="#BF161F2A" />
+        <SolidColorBrush x:Key="StrokeBrush" Color="#30A6B4C5" />
+        <SolidColorBrush x:Key="SubtleStrokeBrush" Color="#228997A9" />
 
         <Style x:Key="ChromeButtonStyle" TargetType="Button">
             <Setter Property="FontFamily" Value="Bahnschrift SemiLight" />
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="FontSize" Value="12" />
-            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Padding" Value="13,8" />
             <Setter Property="Margin" Value="0,0,8,0" />
-            <Setter Property="Background" Value="#18FFFFFF" />
-            <Setter Property="BorderBrush" Value="#24FFFFFF" />
+            <Setter Property="Background" Value="#20323D4B" />
+            <Setter Property="BorderBrush" Value="#4B556579" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="ChromeBorder"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="14">
+                                CornerRadius="7">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#24FFFFFF" />
-                                <Setter Property="BorderBrush" Value="#40FFFFFF" />
+                                <Setter TargetName="ChromeBorder" Property="Background" Value="#2A3A4758" />
+                                <Setter TargetName="ChromeBorder" Property="BorderBrush" Value="#66728598" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#2863D7B0" />
+                                <Setter TargetName="ChromeBorder" Property="Background" Value="#32425366" />
+                                <Setter TargetName="ChromeBorder" Property="BorderBrush" Value="#70849ABA" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -60,12 +63,109 @@
             </Setter>
         </Style>
 
+        <Style x:Key="TopActionButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+            <Setter Property="FontFamily" Value="Bahnschrift SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="16,9" />
+            <Setter Property="Background" Value="#29384758" />
+            <Setter Property="BorderBrush" Value="#5E7087A6" />
+        </Style>
+
+        <Style x:Key="OpacitySliderThumbStyle" TargetType="Thumb">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="ThumbBorder"
+                                CornerRadius="7"
+                                Background="#FFE5EDF7"
+                                BorderBrush="#FF7BAA90"
+                                BorderThickness="1.2" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ThumbBorder" Property="Background" Value="#FFF4F8FD" />
+                                <Setter TargetName="ThumbBorder" Property="BorderBrush" Value="#FF8AB79E" />
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="ThumbBorder" Property="Background" Value="#FFFFFFFF" />
+                                <Setter TargetName="ThumbBorder" Property="BorderBrush" Value="#FF95C4A9" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="OpacitySliderStyle" TargetType="Slider">
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Margin="0,0,0,0">
+                            <Border Height="6"
+                                    VerticalAlignment="Center"
+                                    CornerRadius="3"
+                                    Background="#27354456"
+                                    BorderBrush="#00000000"
+                                    BorderThickness="0" />
+                            <Track x:Name="PART_Track"
+                                   VerticalAlignment="Center">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Focusable="False"
+                                                  IsTabStop="False"
+                                                  Background="#5A76B89A"
+                                                  Margin="0,0,-7,0"
+                                                  BorderBrush="#00000000">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border CornerRadius="3"
+                                                        Background="{TemplateBinding Background}" />
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource OpacitySliderThumbStyle}" />
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Focusable="False"
+                                                  IsTabStop="False"
+                                                  Background="#00000000"
+                                                  BorderBrush="#00000000">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Background="{TemplateBinding Background}" />
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="AccentButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
-            <Setter Property="Foreground" Value="#FF08130F" />
+            <Setter Property="Foreground" Value="#FFF2F6FB" />
             <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-            <Setter Property="BorderBrush" Value="#00000000" />
+            <Setter Property="BorderBrush" Value="#6E8DBFA3" />
             <Setter Property="Padding" Value="16,10" />
             <Setter Property="Margin" Value="0" />
+        </Style>
+
+        <Style x:Key="TodoDeleteButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="12,0,0,0" />
+            <Setter Property="FontFamily" Value="Bahnschrift SemiBold" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Content" Value="X" />
+            <Setter Property="Foreground" Value="#FFE7EDF6" />
+            <Setter Property="Background" Value="#2E5D4350" />
+            <Setter Property="BorderBrush" Value="#7A8C6274" />
         </Style>
 
         <Style x:Key="CalendarDayButtonStyle" TargetType="Button">
@@ -83,7 +183,7 @@
                         <Border Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="15">
+                                CornerRadius="7">
                             <ContentPresenter HorizontalAlignment="Stretch"
                                               VerticalAlignment="Stretch" />
                         </Border>
@@ -96,7 +196,8 @@
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="FontSize" Value="14" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsCompleted}" Value="True">
                     <Setter Property="Opacity" Value="0.42" />
@@ -104,30 +205,328 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <Style x:Key="TodoItemBorderStyle" TargetType="Border">
+            <Setter Property="BorderBrush" Value="#2C4B596D" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="#14212B38" />
+        </Style>
+
+        <DataTemplate x:Key="TodoPanelItemTemplate">
+            <Border Margin="0,0,0,10"
+                    Height="62"
+                    Padding="12"
+                    CornerRadius="16"
+                    Style="{DynamicResource TodoItemBorderStyle}"
+                    AllowDrop="True"
+                    PreviewMouseLeftButtonDown="TodoItemBorderOnPreviewMouseLeftButtonDown"
+                    MouseMove="TodoItemBorderOnMouseMove"
+                    DragOver="TodoItemBorderOnDragOver"
+                    Drop="TodoItemBorderOnDrop">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <CheckBox Grid.Column="0"
+                              Style="{DynamicResource TodoCheckBoxStyle}"
+                              VerticalAlignment="Center"
+                              Margin="0"
+                              IsChecked="{Binding IsCompleted, Mode=TwoWay}" />
+
+                    <StackPanel Grid.Column="2"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ScheduleText}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource AccentBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <Trigger Property="Text" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Style="{DynamicResource TodoTitleStyle}"
+                                   Text="{Binding Title}" />
+                    </StackPanel>
+
+                    <CheckBox Grid.Column="3"
+                              Style="{DynamicResource TodoReminderToggleStyle}"
+                              IsChecked="{Binding ReminderEnabled, Mode=TwoWay}"
+                              VerticalAlignment="Center" />
+
+                    <Button Grid.Column="4"
+                            Tag="{Binding Id}"
+                            Style="{DynamicResource TodoDeleteButtonStyle}"
+                            VerticalAlignment="Center"
+                            Click="DeleteTodoButtonOnClick" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <Style x:Key="TodoCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid>
+                            <Border x:Name="Box"
+                                    Width="18"
+                                    Height="18"
+                                    CornerRadius="5"
+                                    Background="#18293749"
+                                    BorderBrush="#7A64788E"
+                                    BorderThickness="1.5" />
+                            <Path x:Name="Mark"
+                                  Width="9"
+                                  Height="7"
+                                  Stretch="Fill"
+                                  Data="M 0 4 L 3 7 L 9 0"
+                                  Stroke="#FF05120D"
+                                  StrokeThickness="2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round"
+                                  Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#A07E95B2" />
+                                <Setter TargetName="Box" Property="Background" Value="#2333465F" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Box" Property="Background" Value="#FF76B89A" />
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#FF76B89A" />
+                                <Setter TargetName="Mark" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Box" Property="Opacity" Value="0.5" />
+                                <Setter TargetName="Mark" Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TodoReminderToggleStyle" TargetType="CheckBox">
+            <Setter Property="Width" Value="54" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+            <Setter Property="Content" Value="알림" />
+            <Setter Property="FontFamily" Value="Bahnschrift SemiBold" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#FFC6D1DE" />
+            <Setter Property="Background" Value="#21314054" />
+            <Setter Property="BorderBrush" Value="#5465798D" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="ToggleBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ToggleBorder" Property="Background" Value="#2A3A4758" />
+                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="#6A7B90A8" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="#FFF3F7FB" />
+                                <Setter TargetName="ToggleBorder" Property="Background" Value="#FF6CA88C" />
+                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="#FF6CA88C" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ToggleBorder" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding TaskTime}" Value="">
+                    <Setter Property="IsEnabled" Value="False" />
+                    <Setter Property="ToolTip" Value="시간이 있어야 알림을 켤 수 있습니다." />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="RepeatOptionButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontFamily" Value="Bahnschrift SemiBold" />
+            <Setter Property="Background" Value="#24324256" />
+            <Setter Property="BorderBrush" Value="#56667B93" />
+            <Setter Property="Foreground" Value="#FFD8E4F3" />
+        </Style>
+
+        <Style x:Key="WeekdayChipStyle" TargetType="ToggleButton">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Margin" Value="2,0,2,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontFamily" Value="Bahnschrift SemiBold" />
+            <Setter Property="Foreground" Value="#FFB8C7DB" />
+            <Setter Property="Background" Value="#24324256" />
+            <Setter Property="BorderBrush" Value="#56667B93" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="ChipBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ChipBorder" Property="Background" Value="#2A3A4758" />
+                                <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#6675899E" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ChipBorder" Property="Background" Value="#FF76B89A" />
+                                <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#FF76B89A" />
+                                <Setter Property="Foreground" Value="#FFF4F8FD" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ChipBorder" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TodoListScrollBarStyle" TargetType="ScrollBar">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Background" Value="#00000000" />
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid x:Name="ScrollBarHost"
+                              Width="{TemplateBinding Width}"
+                              Margin="1,4,1,4"
+                              Background="{TemplateBinding Background}">
+                            <Border x:Name="TrackRail"
+                                    Margin="2,0,2,0"
+                                    CornerRadius="6"
+                                    Background="#13000000"
+                                    BorderBrush="#22FFFFFF"
+                                    BorderThickness="1" />
+                            <Track x:Name="PART_Track"
+                                   IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand"
+                                                  Opacity="0"
+                                                  Focusable="False"
+                                                  IsTabStop="False" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb MinHeight="28">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border x:Name="ThumbBorder"
+                                                        Margin="2,2,2,2"
+                                                        CornerRadius="5"
+                                                        Background="#8FA5B8CC"
+                                                        BorderBrush="#3FFFFFFF"
+                                                        BorderThickness="1" />
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="ThumbBorder" Property="Background" Value="#A8C0D2E3" />
+                                                        <Setter TargetName="ThumbBorder" Property="BorderBrush" Value="#5FFFFFFF" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsDragging" Value="True">
+                                                        <Setter TargetName="ThumbBorder" Property="Background" Value="#B7D1E2F0" />
+                                                        <Setter TargetName="ThumbBorder" Property="BorderBrush" Value="#74FFFFFF" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand"
+                                                  Opacity="0"
+                                                  Focusable="False"
+                                                  IsTabStop="False" />
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Orientation" Value="Horizontal">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0" />
+                                <Setter Property="IsHitTestVisible" Value="False" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="True">
+                                <Setter Property="Opacity" Value="1" />
+                                <Setter Property="IsHitTestVisible" Value="True" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TrackRail" Property="Background" Value="#1A000000" />
+                                <Setter TargetName="TrackRail" Property="BorderBrush" Value="#2EFFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
-    <Grid Margin="12">
+    <Grid Margin="6">
         <Border Margin="6,10,6,0"
                 CornerRadius="32"
-                Background="#24000000" />
+                Background="#1A000000" />
 
         <Border x:Name="WidgetChrome"
                 CornerRadius="28"
                 BorderThickness="1"
                 BorderBrush="{StaticResource StrokeBrush}"
-                SizeChanged="WidgetChromeSizeChanged">
+                CacheMode="BitmapCache">
             <Border.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="#F0121A25" Offset="0" />
-                    <GradientStop Color="#F10D141D" Offset="0.55" />
-                    <GradientStop Color="#F0090E14" Offset="1" />
+                    <GradientStop Color="#F21B2533" Offset="0" />
+                    <GradientStop Color="#F2161F2B" Offset="0.55" />
+                    <GradientStop Color="#F1121822" Offset="1" />
                 </LinearGradientBrush>
             </Border.Background>
             <Grid>
+                <Border CornerRadius="27"
+                        Background="#FF121A24" />
+
                 <Canvas IsHitTestVisible="False">
                     <Ellipse Width="200"
                              Height="200"
-                             Fill="#1F63D7B0"
+                             Fill="#10689276"
                              Canvas.Top="-70"
                              Canvas.Left="245">
                         <Ellipse.Effect>
@@ -136,7 +535,7 @@
                     </Ellipse>
                     <Ellipse Width="180"
                              Height="180"
-                             Fill="#18FFA86A"
+                             Fill="#0D6F9A85"
                              Canvas.Top="520"
                              Canvas.Left="-55">
                         <Ellipse.Effect>
@@ -149,112 +548,116 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="12" />
+                        <RowDefinition Height="8" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <Grid Grid.Row="0"
-                          MouseLeftButtonDown="DragAreaMouseLeftButtonDown">
+                    <Grid x:Name="TopBarGrid" Grid.Row="0">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <StackPanel>
-                            <TextBlock Text="DESKTOP TODO"
-                                       Foreground="{StaticResource MutedBrush}"
-                                       FontFamily="Bahnschrift SemiLight"
-                                       FontSize="12" />
-                            <TextBlock Text="Tasks, calendar, and time in one widget"
-                                       Margin="0,5,0,0"
-                                       Foreground="#E6FFFFFF"
-                                       FontSize="15"
-                                       FontWeight="SemiBold" />
+                        <StackPanel Grid.Column="0"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center">
+                            <Button x:Name="ToggleTasksButton"
+                                    Style="{StaticResource TopActionButtonStyle}"
+                                    Width="34"
+                                    Margin="0"
+                                    Padding="0"
+                                    Click="ToggleTasksButtonOnClick" />
+                            <Button x:Name="RecurrenceRulesToggleButton"
+                                    Style="{StaticResource TopActionButtonStyle}"
+                                    Width="66"
+                                    Margin="4,0,0,0"
+                                    Padding="0"
+                                    ClickMode="Press"
+                                    Content="루틴"
+                                    PreviewMouseLeftButtonDown="RecurrenceRulesToggleButtonOnPreviewMouseLeftButtonDown"
+                                    Click="RecurrenceRulesToggleButtonOnClick" />
                         </StackPanel>
 
-                        <StackPanel Grid.Column="1"
+                        <StackPanel Grid.Column="2"
                                     Orientation="Horizontal"
                                     VerticalAlignment="Top">
                             <Button x:Name="PinButton"
-                                    Style="{StaticResource ChromeButtonStyle}"
+                                    Width="56"
+                                    Style="{StaticResource TopActionButtonStyle}"
                                     Click="PinButtonOnClick" />
-                            <Button Style="{StaticResource ChromeButtonStyle}"
+                            <StackPanel Orientation="Horizontal"
+                                        VerticalAlignment="Center"
+                                        Margin="0,0,6,0">
+                                <TextBlock Text="Opacity"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           FontSize="11"
+                                           Margin="0,0,6,0" />
+                                <Slider x:Name="OpacitySlider"
+                                        Style="{StaticResource OpacitySliderStyle}"
+                                        Width="62"
+                                        VerticalAlignment="Center"
+                                        Minimum="0.55"
+                                        Maximum="1.00"
+                                        Value="0.96"
+                                        SmallChange="0.01"
+                                        LargeChange="0.05"
+                                        ValueChanged="OpacitySliderOnValueChanged" />
+                                <TextBlock x:Name="OpacityValueTextBlock"
+                                           Width="36"
+                                           Margin="4,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource TextBrush}"
+                                           FontSize="11"
+                                           TextAlignment="Right"
+                                           FontWeight="SemiBold" />
+                            </StackPanel>
+                            <Button Width="54"
+                                    Style="{StaticResource TopActionButtonStyle}"
                                     Content="Hide"
                                     Margin="0"
                                     Click="HideButtonOnClick" />
                         </StackPanel>
                     </Grid>
 
-                    <Border Grid.Row="1"
-                            Margin="0,12,0,0"
-                            Padding="16"
+                    <Border x:Name="ClockPanelBorder"
+                            Grid.Row="1"
+                            Margin="0,8,0,0"
+                            Padding="12"
                             CornerRadius="24"
                             BorderThickness="1"
                             BorderBrush="{StaticResource SubtleStrokeBrush}"
-                            Background="#7A152030"
-                            MouseLeftButtonDown="DragAreaMouseLeftButtonDown">
+                            Background="#6C202C3A">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
                             <StackPanel>
-                                <TextBlock Text="LIVE CLOCK"
-                                           Foreground="{StaticResource MutedBrush}"
-                                           FontSize="12"
-                                           FontFamily="Bahnschrift SemiLight" />
-                                <StackPanel Margin="0,10,0,0"
-                                            Orientation="Horizontal"
+                                <StackPanel Orientation="Horizontal"
                                             VerticalAlignment="Bottom">
                                     <TextBlock x:Name="TimeTextBlock"
                                                Foreground="{StaticResource TextBrush}"
                                                FontFamily="Bahnschrift Light"
-                                               FontSize="42"
+                                               FontSize="36"
                                                FontWeight="SemiBold" />
                                     <TextBlock x:Name="SecondsTextBlock"
-                                               Margin="8,0,0,7"
+                                               Margin="8,0,0,5"
                                                VerticalAlignment="Bottom"
                                                Foreground="{StaticResource AccentBrush}"
                                                FontFamily="Bahnschrift SemiLight"
-                                               FontSize="16" />
+                                               FontSize="14" />
                                 </StackPanel>
                                 <TextBlock x:Name="DateTextBlock"
-                                           Margin="0,8,0,0"
+                                           Margin="0,5,0,0"
                                            Foreground="#E5FFFFFF"
-                                           FontSize="15" />
+                                           FontSize="14" />
                             </StackPanel>
-
-                            <Border Grid.Column="1"
-                                    Width="74"
-                                    Height="74"
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Center"
-                                    CornerRadius="22"
-                                    Background="#225FD7B0"
-                                    BorderBrush="#24FFFFFF"
-                                    BorderThickness="1">
-                                <Grid>
-                                    <TextBlock Text="TODAY"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               Foreground="#D5FFFFFF"
-                                               FontFamily="Bahnschrift SemiBold"
-                                               FontSize="12" />
-                                </Grid>
-                            </Border>
                         </Grid>
                     </Border>
 
-                    <Grid Grid.Row="3">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="286" />
-                            <RowDefinition Height="10" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-
-                        <Border Grid.Row="0"
-                                Padding="14"
+                    <Grid x:Name="MainBodyHost" Grid.Row="3">
+                        <Border
+                                VerticalAlignment="Top"
+                                Padding="12"
                                 CornerRadius="22"
                                 BorderThickness="1"
                                 BorderBrush="{StaticResource SubtleStrokeBrush}"
@@ -262,10 +665,10 @@
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="10" />
-                                    <RowDefinition Height="Auto" />
                                     <RowDefinition Height="8" />
-                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="6" />
+                                    <RowDefinition Height="236" />
                                 </Grid.RowDefinitions>
 
                                 <Grid Grid.Row="0">
@@ -326,26 +729,44 @@
                                 <UniformGrid x:Name="CalendarDaysGrid"
                                              Grid.Row="4"
                                              Rows="6"
-                                             Columns="7" />
+                                             Columns="7"
+                                             CacheMode="BitmapCache" />
                             </Grid>
                         </Border>
 
-                        <Border Grid.Row="2"
-                                Padding="14"
-                                CornerRadius="22"
-                                BorderThickness="1"
-                                BorderBrush="{StaticResource SubtleStrokeBrush}"
-                                Background="{StaticResource CardSecondaryBrush}">
+                    </Grid>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Popup x:Name="TasksPanelPopup"
+               PlacementTarget="{Binding ElementName=WidgetChrome}"
+               Placement="Left"
+               HorizontalOffset="2"
+               VerticalOffset="0"
+               AllowsTransparency="True"
+               StaysOpen="True"
+               PopupAnimation="Fade"
+               Opened="TasksPanelPopupOnOpened">
+            <Border x:Name="TasksPanelBorder"
+                    Width="372"
+                    Height="{Binding ElementName=WidgetChrome, Path=ActualHeight}"
+                    Padding="14"
+                    CornerRadius="22"
+                    BorderThickness="1"
+                    BorderBrush="{StaticResource SubtleStrokeBrush}"
+                    Background="#FF0E1520">
                             <Grid>
                                 <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="10" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="10" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="8" />
-                                    <RowDefinition Height="Auto" />
+                                <RowDefinition Height="{Binding ElementName=TopBarGrid, Path=ActualHeight}" />
+                                <RowDefinition Height="8" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="8" />
+                                <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
+
+                                <Border CornerRadius="20"
+                                        Background="Transparent" />
 
                                 <Grid Grid.Row="0">
                                     <Grid.ColumnDefinitions>
@@ -353,191 +774,339 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
-                                    <StackPanel>
-                                        <TextBlock Text="TASKS"
-                                                   Foreground="{StaticResource MutedBrush}"
-                                                   FontSize="12"
-                                                   FontFamily="Bahnschrift SemiLight" />
-                                        <TextBlock x:Name="SelectedDateTitleTextBlock"
-                                                   Margin="0,5,0,0"
-                                                   Foreground="{StaticResource TextBrush}"
-                                                   FontSize="18"
-                                                   FontWeight="SemiBold" />
-                                    </StackPanel>
+                                    <TextBlock x:Name="SelectedDateTitleTextBlock"
+                                               Foreground="{StaticResource TextBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
 
                                     <Border Grid.Column="1"
-                                            Padding="10,7"
+                                            Padding="10,3"
                                             CornerRadius="14"
-                                            Background="#1C63D7B0"
-                                            BorderBrush="#24FFFFFF"
-                                            BorderThickness="1">
+                                            Background="#2A2E4054"
+                                            BorderBrush="#4E6B8098"
+                                            BorderThickness="1"
+                                            VerticalAlignment="Center">
                                         <TextBlock x:Name="TaskSummaryTextBlock"
                                                    Foreground="{StaticResource AccentBrush}"
                                                    FontFamily="Bahnschrift SemiBold"
-                                                   FontSize="11" />
+                                                   FontSize="11"
+                                                   VerticalAlignment="Center" />
                                     </Border>
                                 </Grid>
 
                                 <Grid Grid.Row="2">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="6" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
 
-                                    <Border CornerRadius="16"
-                                            Background="#12000000"
-                                            BorderBrush="#1EFFFFFF"
-                                            BorderThickness="1">
-                                        <Grid>
-                                            <TextBox x:Name="TodoInputTextBox"
-                                                     Margin="12,9"
-                                                     Background="Transparent"
-                                                     BorderThickness="0"
-                                                     Foreground="{StaticResource TextBrush}"
-                                                     CaretBrush="{StaticResource AccentBrush}"
-                                                     FontSize="13"
-                                                     VerticalContentAlignment="Center"
-                                                     TextChanged="TodoInputTextBoxOnTextChanged"
-                                                     KeyDown="TodoInputTextBoxOnKeyDown" />
-                                            <TextBlock x:Name="InputPlaceholderTextBlock"
-                                                       Margin="12,9"
-                                                       Foreground="{StaticResource MutedBrush}"
-                                                       FontSize="13"
-                                                       IsHitTestVisible="False"
-                                                       Text="Add a task for the selected day" />
-                                        </Grid>
-                                    </Border>
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
 
-                                    <Button Grid.Column="2"
-                                            Style="{StaticResource AccentButtonStyle}"
-                                            Content="Add"
-                                            Click="AddTodoButtonOnClick" />
+                                        <Border CornerRadius="16"
+                                                Background="#1623313F"
+                                                BorderBrush="#44556A80"
+                                                BorderThickness="1"
+                                                MouseLeftButtonDown="TodoInputContainerOnMouseLeftButtonDown">
+                                            <Grid>
+                                                <TextBox x:Name="TodoInputTextBox"
+                                                         Height="28"
+                                                         Margin="10,2"
+                                                         Background="Transparent"
+                                                         BorderThickness="0"
+                                                         Foreground="{StaticResource TextBrush}"
+                                                         CaretBrush="{StaticResource AccentBrush}"
+                                                         FontSize="13"
+                                                         VerticalContentAlignment="Center"
+                                                         PreviewMouseLeftButtonDown="InputTextBoxOnPreviewMouseLeftButtonDown"
+                                                         TextChanged="TodoInputTextBoxOnTextChanged"
+                                                         KeyDown="TodoInputTextBoxOnKeyDown" />
+                                                <TextBlock x:Name="InputPlaceholderTextBlock"
+                                                           Margin="12,0"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{StaticResource MutedBrush}"
+                                                           FontSize="13"
+                                                           IsHitTestVisible="False"
+                                                           Text="할일 입력" />
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+
+                                    <Grid Grid.Row="2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0"
+                                                Width="96"
+                                                CornerRadius="14"
+                                                Background="#1623313F"
+                                                BorderBrush="#44556A80"
+                                                BorderThickness="1"
+                                                MouseLeftButtonDown="TodoTimeContainerOnMouseLeftButtonDown">
+                                            <Grid>
+                                                <TextBox x:Name="TodoTimeTextBox"
+                                                         Height="28"
+                                                         Margin="8,2"
+                                                         Background="Transparent"
+                                                         BorderThickness="0"
+                                                         Foreground="{StaticResource TextBrush}"
+                                                         CaretBrush="{StaticResource AccentBrush}"
+                                                         FontSize="12"
+                                                         VerticalContentAlignment="Center"
+                                                         MaxLength="4"
+                                                         PreviewMouseLeftButtonDown="InputTextBoxOnPreviewMouseLeftButtonDown"
+                                                         PreviewTextInput="TodoTimeTextBoxOnPreviewTextInput"
+                                                         DataObject.Pasting="TodoTimeTextBoxOnPasting"
+                                                         TextChanged="TodoTimeTextBoxOnTextChanged"
+                                                         KeyDown="TodoInputTextBoxOnKeyDown" />
+                                                <TextBlock x:Name="TimeInputPlaceholderTextBlock"
+                                                           Margin="10,0"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{StaticResource MutedBrush}"
+                                                           FontSize="12"
+                                                           IsHitTestVisible="False"
+                                                           Text="HH:mm" />
+                                            </Grid>
+                                        </Border>
+
+                                        <Button x:Name="ReminderToggleButton"
+                                                Grid.Column="2"
+                                                Style="{StaticResource ChromeButtonStyle}"
+                                                Width="78"
+                                                Padding="0"
+                                                Content="알림 On"
+                                                Click="ReminderToggleButtonOnClick" />
+
+                                        <Button x:Name="RepeatModeButton"
+                                                Grid.Column="4"
+                                                Style="{StaticResource ChromeButtonStyle}"
+                                                Width="74"
+                                                Padding="0"
+                                                Content="반복 없음"
+                                                Click="RepeatModeButtonOnClick" />
+
+                                        <Button Grid.Column="6"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                Width="62"
+                                                Height="34"
+                                                Padding="0"
+                                                Margin="0"
+                                                Content="Add"
+                                                Click="AddTodoButtonOnClick" />
+                                    </Grid>
+
+                                    <Popup x:Name="RepeatOptionsPanel"
+                                           PlacementTarget="{Binding ElementName=RepeatModeButton}"
+                                           Placement="Bottom"
+                                           HorizontalOffset="0"
+                                           VerticalOffset="6"
+                                           AllowsTransparency="True"
+                                           StaysOpen="False"
+                                           PopupAnimation="Fade"
+                                           Opened="RepeatOptionsPanelOnOpened"
+                                           Closed="RepeatOptionsPanelOnClosed">
+                                        <Border x:Name="RepeatOptionsPanelBorder"
+                                                Width="330"
+                                                Padding="10"
+                                                CornerRadius="12"
+                                                BorderThickness="1"
+                                                BorderBrush="#4D64788F"
+                                                Background="#FF0E1520">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="8" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="8" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <Grid Grid.Row="0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="6" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="6" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Button x:Name="RepeatNoneButton"
+                                                            Grid.Column="0"
+                                                            Style="{StaticResource RepeatOptionButtonStyle}"
+                                                            Content="반복 없음"
+                                                            Click="RepeatNoneButtonOnClick" />
+                                                    <Button x:Name="RepeatDailyButton"
+                                                            Grid.Column="2"
+                                                            Style="{StaticResource RepeatOptionButtonStyle}"
+                                                            Content="매일"
+                                                            Click="RepeatDailyButtonOnClick" />
+                                                    <Button x:Name="RepeatWeeklyButton"
+                                                            Grid.Column="4"
+                                                            Style="{StaticResource RepeatOptionButtonStyle}"
+                                                            Content="매주"
+                                                            Click="RepeatWeeklyButtonOnClick" />
+                                                </Grid>
+
+                                                <UniformGrid x:Name="WeekdayButtonsHost" Grid.Row="2" Columns="7">
+                                                    <ToggleButton x:Name="WeekdayMonButton" Style="{StaticResource WeekdayChipStyle}" Content="월" Tag="1" Click="WeekdayToggleButtonOnClick" />
+                                                    <ToggleButton x:Name="WeekdayTueButton" Style="{StaticResource WeekdayChipStyle}" Content="화" Tag="2" Click="WeekdayToggleButtonOnClick" />
+                                                    <ToggleButton x:Name="WeekdayWedButton" Style="{StaticResource WeekdayChipStyle}" Content="수" Tag="4" Click="WeekdayToggleButtonOnClick" />
+                                                    <ToggleButton x:Name="WeekdayThuButton" Style="{StaticResource WeekdayChipStyle}" Content="목" Tag="8" Click="WeekdayToggleButtonOnClick" />
+                                                    <ToggleButton x:Name="WeekdayFriButton" Style="{StaticResource WeekdayChipStyle}" Content="금" Tag="16" Click="WeekdayToggleButtonOnClick" />
+                                                    <ToggleButton x:Name="WeekdaySatButton" Style="{StaticResource WeekdayChipStyle}" Content="토" Tag="32" Click="WeekdayToggleButtonOnClick" />
+                                                    <ToggleButton x:Name="WeekdaySunButton" Style="{StaticResource WeekdayChipStyle}" Content="일" Tag="64" Click="WeekdayToggleButtonOnClick" />
+                                                </UniformGrid>
+
+                                                <Button Grid.Row="4"
+                                                        Width="64"
+                                                        HorizontalAlignment="Right"
+                                                        Style="{StaticResource ChromeButtonStyle}"
+                                                        Margin="0"
+                                                        Padding="0"
+                                                        Content="닫기"
+                                                        Click="RepeatCloseButtonOnClick" />
+                                            </Grid>
+                                        </Border>
+                                    </Popup>
                                 </Grid>
 
                                 <Grid Grid.Row="4">
                                     <Border CornerRadius="18"
-                                            Background="#0EFFFFFF"
-                                            BorderBrush="#14FFFFFF"
+                                            Background="#1623313F"
+                                            BorderBrush="#425A6E84"
                                             BorderThickness="1" />
 
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                                  HorizontalScrollBarVisibility="Disabled"
-                                                  Padding="8">
-                                        <Grid>
-                                            <ItemsControl x:Name="TodoItemsControl">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Margin="0,0,0,10"
-                                                                Padding="12"
-                                                                CornerRadius="16"
-                                                                Background="#12000000"
-                                                                BorderBrush="#14FFFFFF"
-                                                                BorderThickness="1">
-                                                            <Grid>
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                    <ColumnDefinition Width="10" />
-                                                                    <ColumnDefinition Width="*" />
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                </Grid.ColumnDefinitions>
-
-                                                                <CheckBox Grid.Column="0"
-                                                                          VerticalAlignment="Top"
-                                                                          Margin="0,2,0,0"
-                                                                          IsChecked="{Binding IsCompleted, Mode=TwoWay}" />
-
-                                                                <TextBlock Grid.Column="2"
-                                                                           Style="{StaticResource TodoTitleStyle}"
-                                                                           Text="{Binding Title}" />
-
-                                                                <Button Grid.Column="3"
-                                                                        Content="Delete"
-                                                                        Tag="{Binding Id}"
-                                                                        Style="{StaticResource ChromeButtonStyle}"
-                                                                        Margin="12,0,0,0"
-                                                                        Padding="10,6"
-                                                                        FontSize="11"
-                                                                        Click="DeleteTodoButtonOnClick" />
-                                                            </Grid>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-
-                                            <TextBlock x:Name="EmptyStateTextBlock"
-                                                       Margin="8"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center"
-                                                       TextAlignment="Center"
-                                                       Foreground="{StaticResource MutedBrush}"
-                                                       FontSize="13"
-                                                       Visibility="Collapsed"
-                                                       Text="No tasks saved for this day." />
-                                        </Grid>
-                                    </ScrollViewer>
-                                </Grid>
-
-                                <Grid Grid.Row="6" Margin="0,4,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <StackPanel Orientation="Horizontal"
-                                                VerticalAlignment="Center">
-                                        <TextBlock Text="Opacity"
+                                    <Grid>
+                                        <ScrollViewer x:Name="TodoListScrollViewer"
+                                                      Loaded="TodoListScrollViewerOnLoaded"
+                                                      VerticalScrollBarVisibility="Visible"
+                                                      HorizontalScrollBarVisibility="Disabled"
+                                                      Padding="8">
+                                            <ScrollViewer.Resources>
+                                                <Style TargetType="ScrollBar" BasedOn="{StaticResource TodoListScrollBarStyle}" />
+                                            </ScrollViewer.Resources>
+                                            <ItemsControl x:Name="TodoItemsControl"
+                                                          ItemTemplate="{StaticResource TodoPanelItemTemplate}" />
+                                        </ScrollViewer>
+                                        <TextBlock x:Name="EmptyStateTextBlock"
+                                                   Margin="8"
+                                                   HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"
+                                                   TextAlignment="Center"
                                                    Foreground="{StaticResource MutedBrush}"
-                                                   FontSize="11" />
-                                        <Slider x:Name="OpacitySlider"
-                                                Width="72"
-                                                Margin="8,0,0,0"
-                                                Minimum="0.55"
-                                                Maximum="1.00"
-                                                Value="0.96"
-                                                SmallChange="0.01"
-                                                LargeChange="0.05"
-                                                ValueChanged="OpacitySliderOnValueChanged" />
-                                        <TextBlock x:Name="OpacityValueTextBlock"
-                                                   Margin="8,0,0,0"
-                                                   VerticalAlignment="Center"
-                                                   Foreground="{StaticResource TextBrush}"
-                                                   FontSize="11"
-                                                   FontWeight="SemiBold" />
-                                    </StackPanel>
-
-                                    <Button x:Name="StartupButton"
-                                            Grid.Column="1"
-                                            Style="{StaticResource ChromeButtonStyle}"
-                                            Padding="10,6"
-                                            FontSize="11"
-                                            Click="StartupButtonOnClick" />
-
-                                    <Button x:Name="OpenDataButton"
-                                            Grid.Column="2"
-                                            Style="{StaticResource ChromeButtonStyle}"
-                                            Content="Data"
-                                            Padding="10,6"
-                                            FontSize="11"
-                                            Margin="8,0,0,0"
-                                            Click="OpenDataButtonOnClick" />
-
-                                    <Button Grid.Column="3"
-                                            Style="{StaticResource ChromeButtonStyle}"
-                                            Content="Clear"
-                                            Padding="10,6"
-                                            FontSize="11"
-                                            Margin="8,0,0,0"
-                                            Click="ClearCompletedButtonOnClick" />
+                                                   FontSize="13"
+                                                   Visibility="Collapsed"
+                                                   Text="할일이 없습니다." />
+                                    </Grid>
                                 </Grid>
+
                             </Grid>
                         </Border>
-                    </Grid>
+        </Popup>
+
+        <Popup x:Name="RecurrenceRulesPopup"
+               PlacementTarget="{Binding ElementName=RecurrenceRulesToggleButton}"
+               Placement="Bottom"
+               HorizontalOffset="0"
+               VerticalOffset="6"
+               AllowsTransparency="True"
+               StaysOpen="False"
+               PopupAnimation="Fade"
+               Opened="RecurrenceRulesPopupOnOpened"
+               Closed="RecurrenceRulesPopupOnClosed">
+            <Border x:Name="RecurrenceRulesPanelBorder"
+                    Width="320"
+                    Padding="10"
+                    CornerRadius="12"
+                    BorderThickness="1"
+                    BorderBrush="#4D64788F"
+                    Background="#FF0E1520">
+                <Grid>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  MaxHeight="220">
+                        <ItemsControl x:Name="RecurrenceRulesItemsControl">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,6"
+                                            Padding="8"
+                                            CornerRadius="10"
+                                            Background="#1A283647"
+                                            BorderBrush="#425A6E84"
+                                            BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="6" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{Binding TitleTemplate}"
+                                                           Foreground="{StaticResource TextBrush}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding RuleLabel}"
+                                                           Foreground="{StaticResource MutedBrush}"
+                                                           FontSize="11" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1"
+                                                    Width="62"
+                                                    Height="24"
+                                                    Padding="0"
+                                                    Tag="{Binding Id}"
+                                                    Click="ToggleRecurrenceRuleActiveButtonOnClick">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+                                                        <Setter Property="Content" Value="비활성" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                                                <Setter Property="Content" Value="활성" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Grid.Column="3"
+                                                    Width="46"
+                                                    Height="24"
+                                                    Padding="0"
+                                                    Style="{StaticResource ChromeButtonStyle}"
+                                                    Content="삭제"
+                                                    Tag="{Binding Id}"
+                                                    Click="DeleteRecurrenceRuleButtonOnClick" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <TextBlock x:Name="EmptyRecurrenceRulesTextBlock"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource MutedBrush}"
+                               FontSize="12"
+                               Text="등록된 루틴이 없습니다." />
                 </Grid>
-            </Grid>
-        </Border>
+            </Border>
+        </Popup>
+
+        <StackPanel Visibility="Collapsed">
+            <Button x:Name="StartupButton" Click="StartupButtonOnClick" />
+            <Button x:Name="OpenDataButton" Click="OpenDataButtonOnClick" />
+        </StackPanel>
     </Grid>
 </Window>

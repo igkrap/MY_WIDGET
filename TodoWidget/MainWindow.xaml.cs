@@ -73,6 +73,7 @@ namespace TodoWidget
 
         private DateTime _selectedDate;
         private DateTime _displayedMonth;
+        private DateTime _lastObservedDate;
         private bool _isInitializing;
         private bool _isTaskPanelExpanded;
         private bool _isBulkTodoUpdate;
@@ -117,6 +118,7 @@ namespace TodoWidget
 
             _selectedDate = DateTime.Today;
             _displayedMonth = new DateTime(_selectedDate.Year, _selectedDate.Month, 1);
+            _lastObservedDate = DateTime.Today;
             _isTaskPanelExpanded = false;
             _selectedWeekdayMask = GetWeekdayBit(_selectedDate.DayOfWeek);
 
@@ -268,6 +270,7 @@ namespace TodoWidget
         private void ClockTimerTick(object sender, EventArgs e)
         {
             UpdateClock();
+            SyncCalendarSelectionWithCurrentDate();
             CheckDueReminders();
             CheckTelegramCommands();
         }
@@ -278,6 +281,21 @@ namespace TodoWidget
             TimeTextBlock.Text = now.ToString("HH:mm");
             SecondsTextBlock.Text = now.ToString("ss");
             DateTextBlock.Text = now.ToString("yyyy.MM.dd dddd", _koreanCulture);
+        }
+
+        private void SyncCalendarSelectionWithCurrentDate()
+        {
+            var today = DateTime.Today;
+            if (today == _lastObservedDate.Date)
+            {
+                return;
+            }
+
+            _lastObservedDate = today;
+            _selectedDate = today;
+            _displayedMonth = new DateTime(today.Year, today.Month, 1);
+            _selectedWeekdayMask = GetWeekdayBit(today.DayOfWeek);
+            RefreshAll();
         }
 
         private void RefreshAll()
